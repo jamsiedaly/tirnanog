@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 tcod = "0.15"
 noise = "0.6.0"
+rand = "0.7.3"

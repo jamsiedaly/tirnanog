@@ -2,15 +2,20 @@ use noise::{NoiseFn, Perlin};
 use tcod::colors::*;
 use tcod::console::*;
 use tcod::map::{FovAlgorithm, Map as FovMap};
+use rand::Rng;
 
-// actual size of the window
-const SCREEN_WIDTH: i32 = 180;
-const SCREEN_HEIGHT: i32 = 90;
+const CAMERA_WIDTH: i32 = 40;
+const CAMERA_HEIGHT: i32 = 30;
+
 
 // size of the map
-const MAP_WIDTH: i32 = 180;
-const MAP_HEIGHT: i32 = 90;
+const MAP_WIDTH: i32 = 1000;
+const MAP_HEIGHT: i32 = 450;
 const GAME_SEED: f64 = 1.5;
+
+// actual size of the window
+const SCREEN_WIDTH: i32 = CAMERA_WIDTH;
+const SCREEN_HEIGHT: i32 = CAMERA_HEIGHT;
 
 const LIMIT_FPS: i32 = 20; // 20 frames-per-second maximum
 
@@ -39,9 +44,14 @@ const COLOR_PLAINS: Color = Color {
     g: 214,
     b: 110,
 };
+const COLOR_VILLAGE: Color = Color {
+    r: 161,
+    g: 144,
+    b: 110,
+};
 // const COLOR_TOWN: Color = Color { r: 161, g: 140, b: 118 };
 
-const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic; // default FOV algorithm
+const FOV_ALGO: FovAlgorithm = FovAlgorithm::Shadow; // default FOV algorithm
 const FOV_LIGHT_WALLS: bool = true; // light walls or not
 const TORCH_RADIUS: i32 = 10;
 
@@ -63,6 +73,7 @@ struct Tile {
     blocked: bool,
     block_sight: bool,
     explored: bool,
+    buildable: bool,
     color: Color,
 }
 
@@ -72,6 +83,7 @@ impl Tile {
             blocked: false,
             block_sight: false,
             explored: false,
+            buildable: true,
             color: COLOR_PLAINS,
         }
     }
@@ -81,6 +93,7 @@ impl Tile {
             blocked: true,
             block_sight: true,
             explored: false,
+            buildable: false,
             color: COLOR_MOUNTAIN,
         }
     }
@@ -90,6 +103,7 @@ impl Tile {
             blocked: true,
             block_sight: true,
             explored: false,
+            buildable: false,
             color: COLOR_HILL,
         }
     }
@@ -99,6 +113,7 @@ impl Tile {
             blocked: false,
             block_sight: false,
             explored: false,
+            buildable: true,
             color: COLOR_FOREST,
         }
     }
@@ -108,6 +123,7 @@ impl Tile {
             blocked: true,
             block_sight: false,
             explored: false,
+            buildable: false,
             color: COLOR_SEA,
         }
     }
@@ -120,34 +136,13 @@ struct Object {
     x: i32,
     y: i32,
     char: char,
+    grants_vision: bool,
     color: Color,
 }
 
 impl Object {
-    pub fn new(x: i32, y: i32, char: char, color: Color) -> Self {
-        Object { x, y, char, color }
-    }
-
-    /// move by the given amount, if the destination is not blocked
-    pub fn move_by(&mut self, dx: i32, dy: i32, game: &Game) {
-        let next_x = if self.x + dx >= MAP_WIDTH {
-            0
-        } else if self.x + dx < 0 {
-            MAP_WIDTH - 1
-        } else {
-            self.x + dx
-        };
-        let next_y = if self.y + dy >= MAP_HEIGHT {
-            0
-        } else if self.y + dy < 0 {
-            MAP_HEIGHT - 1
-        } else {
-            self.y + dy
-        };
-        if !game.map[next_x as usize][next_y as usize].blocked {
-            self.x = next_x;
-            self.y = next_y;
-        }
+    pub fn new(x: i32, y: i32, char: char, color: Color, grants_vision: bool) -> Self {
+        Object { x, y, char, color, grants_vision }
     }
 
     /// set the color and then draw the character that represents this object at its position
@@ -155,11 +150,52 @@ impl Object {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
+
+    pub fn pos(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+
+    pub fn set_pos(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
+}
+
+fn build_village(x: i32, y: i32, game: &Game, objects: &mut Vec<Object>) {
+    let current_tile = game.map[x as usize ][y as usize];
+    if current_tile.buildable {
+        let village = Object::new(x, y, '1', COLOR_VILLAGE, true);
+        objects.push(village);
+    }
+}
+
+fn move_by(id: usize, dx: i32, dy: i32, game: &Game, objects: &mut Vec<Object>) {
+    let (x, y) = objects[id].pos();
+    let x = x - MAP_WIDTH;
+    let y = y - MAP_HEIGHT;
+    let next_x = if x + dx >= MAP_WIDTH {
+        0
+    } else if x + dx < 0 {
+        MAP_WIDTH - 1
+    } else {
+        x + dx
+    };
+    let next_y = if y + dy >= MAP_HEIGHT {
+        0
+    } else if y + dy < 0 {
+        MAP_HEIGHT - 1
+    } else {
+        y + dy
+    };
+
+    if !game.map[next_x as usize][next_y as usize].blocked {
+        objects[id].set_pos(next_x + MAP_WIDTH, next_y + MAP_HEIGHT);
+    }
 }
 
 fn make_map() -> Map {
     // fill map with "unblocked" tiles
-    let mut map = vec![vec![Tile::empty(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
+    let mut map = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
     let perlin = Perlin::new();
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
@@ -173,52 +209,78 @@ fn make_map() -> Map {
                 height += mountain_modifier.abs()
             }
 
-            if height >= 1.1 {
-                map[x as usize][y as usize] = Tile::mountain()
-            } else if height >= 0.50 {
-                map[x as usize][y as usize] = Tile::hill()
-            } else if height < -0.175 {
-                map[x as usize][y as usize] = Tile::water()
-            } else if fertility >= 0.25 {
-                map[x as usize][y as usize] = Tile::forest()
+            for i in 0..3 {
+                for j in 0..3 {
+                    if height >= 1.1 {
+                        map[(x + (MAP_WIDTH*i))  as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::mountain()
+                    } else if height >= 0.50 {
+                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::hill()
+                    } else if height < -0.175 {
+                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::water()
+                    } else if fertility >= 0.25 {
+                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::forest()
+                    }
+                }
             }
+
+
         }
     }
     map
 }
 
 fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
+    let player = &objects[0];
     if fov_recompute {
         // recompute FOV if needed (the player moved or something)
-        let player = &objects[0];
         tcod.fov
-            .compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
+            .compute_fov(
+            player.x,
+            player.y,
+            TORCH_RADIUS,
+            FOV_LIGHT_WALLS,
+            FOV_ALGO
+        );
     }
 
-    // go through all tiles, and set their background color
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
-            let visible = tcod.fov.is_in_fov(x, y);
-            let tile = game.map[x as usize][y as usize];
-            let color = if visible {
-                let explored = &mut game.map[x as usize][y as usize].explored;
-                *explored = true;
-                tile.color
-            } else if !tile.explored {
-                Color {
-                    r: 242,
-                    g: 227,
-                    b: 211,
+    let top = player.y - (CAMERA_HEIGHT / 2);
+    let bottom = player.y + (CAMERA_HEIGHT / 2);
+    let left = player.x - (CAMERA_WIDTH / 2);
+    let right = player.x + (CAMERA_WIDTH / 2);
+
+    for y in top..bottom {
+        for x in left..right {
+            for vertical_offset in -1..2 {
+                for horizontal_offset in -1..2 {
+                    let visible = tcod.fov.is_in_fov(x, y);
+                    let mut x = x + (MAP_WIDTH * horizontal_offset);
+                    x = if x < 0 { 0 } else if x >= (MAP_WIDTH*3) { (MAP_WIDTH*3) - 1 } else {x};
+                    let mut y = y + (MAP_HEIGHT * vertical_offset);
+                    y = if y < 0 { 0 } else if y >= (MAP_HEIGHT*3) { (MAP_HEIGHT*3) - 1 } else {y};
+                    let tile = game.map[x as usize][y as usize];
+                    let color = if visible {
+                        let explored = &mut game.map[x as usize][y as usize].explored;
+                        *explored = true;
+                        tile.color
+                    } else if !tile.explored {
+                        Color {
+                            r: 242,
+                            g: 227,
+                            b: 211,
+                        }
+                    } else {
+                        Color {
+                            r: tile.color.r / 3,
+                            g: tile.color.g / 3,
+                            b: tile.color.b / 3,
+                        }
+                    };
+                    if vertical_offset == 0 && horizontal_offset == 0 {
+                        tcod.con
+                            .set_char_background(x, y, color, BackgroundFlag::Set);
+                    }
                 }
-            } else {
-                Color {
-                    r: tile.color.r / 3,
-                    g: tile.color.g / 3,
-                    b: tile.color.b / 3,
-                }
-            };
-            tcod.con
-                .set_char_background(x, y, color, BackgroundFlag::Set);
+            }
         }
     }
 
@@ -227,19 +289,31 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         object.draw(&mut tcod.con);
     }
 
+    let source_x = (player.x - (CAMERA_WIDTH / 2));
+    let source_y = (player.y - (CAMERA_HEIGHT / 2));
+
     // blit the contents of "con" to the root console
     blit(
         &tcod.con,
-        (0, 0),
-        (MAP_WIDTH, MAP_HEIGHT),
+        (source_x, source_y),
+        (CAMERA_WIDTH, CAMERA_HEIGHT),
         &mut tcod.root,
         (0, 0),
         1.0,
         1.0,
     );
+    // blit(
+    //     &tcod.con,
+    //     (0, 0),
+    //     (MAP_WIDTH*3, MAP_HEIGHT*3),
+    //     &mut tcod.root,
+    //     (0, 0),
+    //     1.0,
+    //     1.0,
+    // );
 }
 
-fn handle_keys(tcod: &mut Tcod, game: &Game, player: &mut Object) -> bool {
+fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut Vec<Object>) -> bool {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
 
@@ -257,15 +331,28 @@ fn handle_keys(tcod: &mut Tcod, game: &Game, player: &mut Object) -> bool {
         Key { code: Escape, .. } => return true, // exit game
 
         // movement keys
-        Key { code: Up, .. } => player.move_by(0, -1, game),
-        Key { code: Down, .. } => player.move_by(0, 1, game),
-        Key { code: Left, .. } => player.move_by(-1, 0, game),
-        Key { code: Right, .. } => player.move_by(1, 0, game),
+        Key { code: Up, .. } => move_by(0, 0, -1, game, objects),
+        Key { code: Down, .. } => move_by(0, 0, 1, game, objects),
+        Key { code: Left, .. } => move_by(0,-1, 0, game, objects),
+        Key { code: Right, .. } => move_by(0, 1, 0, game, objects),
+        Key { code: Spacebar, .. } => build_village(objects[0].x, objects[0].y, game, objects),
 
         _ => {}
     }
 
     false
+}
+
+fn surrounded_by_land(x: i32, y: i32, map: &Map) -> bool {
+    for x_offset in -1..1 {
+        for y_offset in -1..1 {
+            let tile: Tile = map[(x+x_offset).abs() as usize][(y+y_offset).abs() as usize];
+            if tile.blocked {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 fn main() {
@@ -280,28 +367,30 @@ fn main() {
 
     let mut tcod = Tcod {
         root,
-        con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT),
-        fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
+        con: Offscreen::new(MAP_WIDTH*3, MAP_HEIGHT*3),
+        fov: FovMap::new(MAP_WIDTH*3, MAP_HEIGHT*3),
     };
-
-    // create object representing the player
-    let player = Object::new(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, '@', WHITE);
-
-    // create an NPC
-    let npc = Object::new(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', YELLOW);
-
-    // the list of objects with those two
-    let mut objects = [player, npc];
 
     let mut game = Game {
         // generate map (at this point it's not drawn to the screen)
         map: make_map(),
     };
 
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
+    let player = loop {
+        let mut rng = rand::thread_rng();
+        let x = rng.gen_range(0, MAP_WIDTH);
+        let y = rng.gen_range(0, MAP_HEIGHT);
+        if surrounded_by_land(x, y, &game.map) {
+            break Object::new(x + MAP_WIDTH, y + MAP_HEIGHT, '@', WHITE, true);
+        }
+    };
+
+    let mut objects = vec![player];
+
+    for y in 0..MAP_HEIGHT*3 {
+        for x in 0..MAP_WIDTH*3 {
             tcod.fov.set(
-                x,
+                x ,
                 y,
                 !game.map[x as usize][y as usize].block_sight,
                 !game.map[x as usize][y as usize].blocked,
@@ -324,7 +413,7 @@ fn main() {
         // handle keys and exit game if needed
         let player = &mut objects[0];
         previous_player_position = (player.x, player.y);
-        let exit = handle_keys(&mut tcod, &game, player);
+        let exit = handle_keys(&mut tcod, &mut game, &mut objects);
         if exit {
             break;
         }
