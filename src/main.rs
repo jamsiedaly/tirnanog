@@ -3,167 +3,14 @@ use tcod::colors::*;
 use tcod::console::*;
 use tcod::map::{FovAlgorithm, Map as FovMap};
 use rand::Rng;
-
-const CAMERA_WIDTH: i32 = 40;
-const CAMERA_HEIGHT: i32 = 30;
-
-
-// size of the map
-const MAP_WIDTH: i32 = 1000;
-const MAP_HEIGHT: i32 = 450;
-const GAME_SEED: f64 = 1.5;
-
-// actual size of the window
-const SCREEN_WIDTH: i32 = CAMERA_WIDTH;
-const SCREEN_HEIGHT: i32 = CAMERA_HEIGHT;
-
-const LIMIT_FPS: i32 = 20; // 20 frames-per-second maximum
-
-const COLOR_MOUNTAIN: Color = Color {
-    r: 244,
-    g: 251,
-    b: 252,
-};
-const COLOR_HILL: Color = Color {
-    r: 214,
-    g: 163,
-    b: 110,
-};
-const COLOR_SEA: Color = Color {
-    r: 127,
-    g: 191,
-    b: 191,
-};
-const COLOR_FOREST: Color = Color {
-    r: 127,
-    g: 191,
-    b: 127,
-};
-const COLOR_PLAINS: Color = Color {
-    r: 161,
-    g: 214,
-    b: 110,
-};
-const COLOR_VILLAGE: Color = Color {
-    r: 161,
-    g: 144,
-    b: 110,
-};
-// const COLOR_TOWN: Color = Color { r: 161, g: 140, b: 118 };
-
-const FOV_ALGO: FovAlgorithm = FovAlgorithm::Shadow; // default FOV algorithm
-const FOV_LIGHT_WALLS: bool = true; // light walls or not
-const TORCH_RADIUS: i32 = 10;
-
-struct Tcod {
-    root: Root,
-    con: Offscreen,
-    fov: FovMap,
-}
-
-type Map = Vec<Vec<Tile>>;
-
-struct Game {
-    map: Map,
-}
-
-/// A tile of the map and its properties
-#[derive(Clone, Copy, Debug)]
-struct Tile {
-    blocked: bool,
-    block_sight: bool,
-    explored: bool,
-    buildable: bool,
-    color: Color,
-}
-
-impl Tile {
-    pub fn empty() -> Self {
-        Tile {
-            blocked: false,
-            block_sight: false,
-            explored: false,
-            buildable: true,
-            color: COLOR_PLAINS,
-        }
-    }
-
-    pub fn mountain() -> Self {
-        Tile {
-            blocked: true,
-            block_sight: true,
-            explored: false,
-            buildable: false,
-            color: COLOR_MOUNTAIN,
-        }
-    }
-
-    pub fn hill() -> Self {
-        Tile {
-            blocked: true,
-            block_sight: true,
-            explored: false,
-            buildable: false,
-            color: COLOR_HILL,
-        }
-    }
-
-    pub fn forest() -> Self {
-        Tile {
-            blocked: false,
-            block_sight: false,
-            explored: false,
-            buildable: true,
-            color: COLOR_FOREST,
-        }
-    }
-
-    pub fn water() -> Self {
-        Tile {
-            blocked: true,
-            block_sight: false,
-            explored: false,
-            buildable: false,
-            color: COLOR_SEA,
-        }
-    }
-}
-
-/// This is a generic object: the player, a monster, an item, the stairs...
-/// It's always represented by a character on screen.
-#[derive(Debug)]
-struct Object {
-    x: i32,
-    y: i32,
-    char: char,
-    grants_vision: bool,
-    color: Color,
-}
-
-impl Object {
-    pub fn new(x: i32, y: i32, char: char, color: Color, grants_vision: bool) -> Self {
-        Object { x, y, char, color, grants_vision }
-    }
-
-    /// set the color and then draw the character that represents this object at its position
-    pub fn draw(&self, con: &mut dyn Console) {
-        con.set_default_foreground(self.color);
-        con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
-    }
-
-    pub fn pos(&self) -> (i32, i32) {
-        (self.x, self.y)
-    }
-
-    pub fn set_pos(&mut self, x: i32, y: i32) {
-        self.x = x;
-        self.y = y;
-    }
-}
+mod settings;
+use crate::settings::settings::*;
+mod game_objects;
+use crate::game_objects::game_objects::*;
 
 fn build_village(x: i32, y: i32, game: &Game, objects: &mut Vec<Object>) {
-    let current_tile = game.map[x as usize ][y as usize];
-    if current_tile.buildable {
+    let current_tile = game.get_tile(x as usize, y as usize);
+    if current_tile.is_buildable() {
         let village = Object::new(x, y, '1', COLOR_VILLAGE, true);
         objects.push(village);
     }
@@ -188,7 +35,7 @@ fn move_by(id: usize, dx: i32, dy: i32, game: &Game, objects: &mut Vec<Object>) 
         y + dy
     };
 
-    if !game.map[next_x as usize][next_y as usize].blocked {
+    if !game.is_tile_blocked(next_x as usize, next_y as usize) {
         objects[id].set_pos(next_x + MAP_WIDTH, next_y + MAP_HEIGHT);
     }
 }
@@ -243,10 +90,10 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         );
     }
 
-    let top = player.y - (CAMERA_HEIGHT / 2);
-    let bottom = player.y + (CAMERA_HEIGHT / 2);
-    let left = player.x - (CAMERA_WIDTH / 2);
-    let right = player.x + (CAMERA_WIDTH / 2);
+    let top = player.y - (game.camera_height / 2);
+    let bottom = player.y + (game.camera_height / 2);
+    let left = player.x - (game.camera_width / 2);
+    let right = player.x + (game.camera_width / 2);
 
     for y in top..bottom {
         for x in left..right {
@@ -257,10 +104,9 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
                     x = if x < 0 { 0 } else if x >= (MAP_WIDTH*3) { (MAP_WIDTH*3) - 1 } else {x};
                     let mut y = y + (MAP_HEIGHT * vertical_offset);
                     y = if y < 0 { 0 } else if y >= (MAP_HEIGHT*3) { (MAP_HEIGHT*3) - 1 } else {y};
-                    let tile = game.map[x as usize][y as usize];
+                    let mut tile = game.get_tile(x as usize, y as usize);
                     let color = if visible {
-                        let explored = &mut game.map[x as usize][y as usize].explored;
-                        *explored = true;
+                        game.set_tile_explored(true, x as usize, y as usize);
                         tile.color
                     } else if !tile.explored {
                         Color {
@@ -289,28 +135,19 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         object.draw(&mut tcod.con);
     }
 
-    let source_x = (player.x - (CAMERA_WIDTH / 2));
-    let source_y = (player.y - (CAMERA_HEIGHT / 2));
+    let source_x = player.x - (game.camera_width / 2);
+    let source_y = player.y - (game.camera_height / 2);
 
-    // blit the contents of "con" to the root console
     blit(
         &tcod.con,
         (source_x, source_y),
-        (CAMERA_WIDTH, CAMERA_HEIGHT),
+        (game.camera_width, game.camera_height),
         &mut tcod.root,
         (0, 0),
         1.0,
         1.0,
     );
-    // blit(
-    //     &tcod.con,
-    //     (0, 0),
-    //     (MAP_WIDTH*3, MAP_HEIGHT*3),
-    //     &mut tcod.root,
-    //     (0, 0),
-    //     1.0,
-    //     1.0,
-    // );
+
 }
 
 fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut Vec<Object>) -> bool {
@@ -347,9 +184,7 @@ fn surrounded_by_land(x: i32, y: i32, map: &Map) -> bool {
     for x_offset in -1..1 {
         for y_offset in -1..1 {
             let tile: Tile = map[(x+x_offset).abs() as usize][(y+y_offset).abs() as usize];
-            if tile.blocked {
-                return false;
-            }
+            return !tile.is_blocked();
         }
     }
     return true;
@@ -357,12 +192,17 @@ fn surrounded_by_land(x: i32, y: i32, map: &Map) -> bool {
 
 fn main() {
     tcod::system::set_fps(LIMIT_FPS);
+    let (screen_width, screen_height) = tcod::system::get_current_resolution();
+    let pixel_width = screen_width / 10;
+    let pixel_height = screen_height / 10;
+
 
     let root = Root::initializer()
         .font("arial10x10.png", FontLayout::Tcod)
         .font_type(FontType::Greyscale)
-        .size(SCREEN_WIDTH, SCREEN_HEIGHT)
-        .title("Rust/libtcod tutorial")
+        .size(pixel_width, pixel_height)
+        .fullscreen(true)
+        .title("Rouge Civ")
         .init();
 
     let mut tcod = Tcod {
@@ -371,9 +211,11 @@ fn main() {
         fov: FovMap::new(MAP_WIDTH*3, MAP_HEIGHT*3),
     };
 
+
     let mut game = Game {
-        // generate map (at this point it's not drawn to the screen)
         map: make_map(),
+        camera_width: pixel_width,
+        camera_height: pixel_height
     };
 
     let player = loop {
@@ -392,8 +234,8 @@ fn main() {
             tcod.fov.set(
                 x ,
                 y,
-                !game.map[x as usize][y as usize].block_sight,
-                !game.map[x as usize][y as usize].blocked,
+                !game.is_tile_blocking_vision(x as usize,y as usize),
+                !game.is_tile_blocked(x as usize,y as usize),
             );
         }
     }
