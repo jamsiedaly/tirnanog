@@ -1,7 +1,7 @@
 use noise::{NoiseFn, Perlin};
 use tcod::colors::*;
 use tcod::console::*;
-use tcod::map::{FovAlgorithm, Map as FovMap};
+use tcod::map::{ Map as FovMap};
 use rand::Rng;
 mod settings;
 use crate::settings::settings::*;
@@ -104,7 +104,7 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
                     x = if x < 0 { 0 } else if x >= (MAP_WIDTH*3) { (MAP_WIDTH*3) - 1 } else {x};
                     let mut y = y + (MAP_HEIGHT * vertical_offset);
                     y = if y < 0 { 0 } else if y >= (MAP_HEIGHT*3) { (MAP_HEIGHT*3) - 1 } else {y};
-                    let mut tile = game.get_tile(x as usize, y as usize);
+                    let tile = game.get_tile(x as usize, y as usize);
                     let color = if visible {
                         game.set_tile_explored(true, x as usize, y as usize);
                         tile.color
