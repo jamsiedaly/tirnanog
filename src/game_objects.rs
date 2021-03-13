@@ -2,7 +2,7 @@ pub mod game_objects {
     use crate::settings::settings::{COLOR_PLAINS, COLOR_MOUNTAIN, COLOR_HILL, COLOR_FOREST, COLOR_SEA};
     use tcod::{Color, Console, BackgroundFlag};
     use tcod::console::{Root, Offscreen};
-    use tcod::map::{FovAlgorithm, Map as FovMap};
+    use tcod::map::{ Map as FovMap};
 
     /// This is a generic object: the player, a monster, an item, the stairs...
     /// It's always represented by a character on screen.
@@ -63,10 +63,6 @@ pub mod game_objects {
     impl Game {
         pub fn is_tile_blocked(&self, x: usize, y: usize) -> bool {
             return self.map[x][y].blocked;
-        }
-
-        pub fn is_tile_explored(&self, x: usize, y: usize) -> bool {
-            return self.map[x][y].explored;
         }
 
         pub fn is_tile_blocking_vision(&self, x: usize, y: usize) -> bool {
