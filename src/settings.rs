@@ -8,7 +8,7 @@ pub mod settings {
 
     pub const FOV_ALGO: FovAlgorithm = FovAlgorithm::Shadow; // default FOV algorithm
     pub const FOV_LIGHT_WALLS: bool = true; // light walls or not
-    pub const TORCH_RADIUS: i32 = 10;
+    pub const TORCH_RADIUS: i32 = 15;
 
     pub const LIMIT_FPS: i32 = 60; // 20 frames-per-second maximum
 

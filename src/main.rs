@@ -48,7 +48,7 @@ fn make_map() -> Map {
         for x in 0..MAP_WIDTH {
             let mut height = 0.0;
             let fertility = perlin.get([x as f64 / 10f64, y as f64 / 10f64, 1.999_282_82]);
-            let mountain_modifier = perlin.get([x as f64 / 10f64, y as f64 / 10f64, 1.35424]);
+            let mountain_modifier = perlin.get([x as f64 / 10f64, y as f64 / 10f64, 2.5]);
             height += perlin.get([x as f64 / 10f64, y as f64 / 10f64, GAME_SEED]);
             height += perlin.get([x as f64, y as f64, GAME_SEED + 1.0]) / 7.5;
 
@@ -193,8 +193,8 @@ fn surrounded_by_land(x: i32, y: i32, map: &Map) -> bool {
 fn main() {
     tcod::system::set_fps(LIMIT_FPS);
     let (screen_width, screen_height) = tcod::system::get_current_resolution();
-    let pixel_width = screen_width / 10;
-    let pixel_height = screen_height / 10;
+    let pixel_width = screen_width / 20;
+    let pixel_height = screen_height / 20;
 
 
     let root = Root::initializer()
