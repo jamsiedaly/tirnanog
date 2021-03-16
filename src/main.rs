@@ -7,38 +7,31 @@ mod settings;
 use crate::settings::settings::*;
 mod game_objects;
 use crate::game_objects::game_objects::*;
+use legion::{World, IntoQuery, Entity};
 
-fn build_village(x: i32, y: i32, game: &Game, objects: &mut Vec<Object>) {
-    let current_tile = game.get_tile(x as usize, y as usize);
-    if current_tile.is_buildable() {
-        let village = Object::new(x, y, '1', COLOR_VILLAGE, true);
-        objects.push(village);
-    }
-}
-
-fn move_by(id: usize, dx: i32, dy: i32, game: &Game, objects: &mut Vec<Object>) {
-    let (x, y) = objects[id].pos();
-    let x = x - MAP_WIDTH;
-    let y = y - MAP_HEIGHT;
-    let next_x = if x + dx >= MAP_WIDTH {
-        0
-    } else if x + dx < 0 {
-        MAP_WIDTH - 1
-    } else {
-        x + dx
-    };
-    let next_y = if y + dy >= MAP_HEIGHT {
-        0
-    } else if y + dy < 0 {
-        MAP_HEIGHT - 1
-    } else {
-        y + dy
-    };
-
-    if !game.is_tile_blocked(next_x as usize, next_y as usize) {
-        objects[id].set_pos(next_x + MAP_WIDTH, next_y + MAP_HEIGHT);
-    }
-}
+// fn move_by(, dx: i32, dy: i32, game: &Game) {
+//     let (x, y) = game.world.components().pos();
+//     let x = x - MAP_WIDTH;
+//     let y = y - MAP_HEIGHT;
+//     let next_x = if x + dx >= MAP_WIDTH {
+//         0
+//     } else if x + dx < 0 {
+//         MAP_WIDTH - 1
+//     } else {
+//         x + dx
+//     };
+//     let next_y = if y + dy >= MAP_HEIGHT {
+//         0
+//     } else if y + dy < 0 {
+//         MAP_HEIGHT - 1
+//     } else {
+//         y + dy
+//     };
+//
+//     if !game.is_tile_blocked(next_x as usize, next_y as usize) {
+//         objects[id].set_pos(next_x + MAP_WIDTH, next_y + MAP_HEIGHT);
+//     }
+// }
 
 fn make_map() -> Map {
     // fill map with "unblocked" tiles
@@ -76,24 +69,31 @@ fn make_map() -> Map {
     map
 }
 
-fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
-    let player = &objects[0];
+fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Entity) {
     if fov_recompute {
-        // recompute FOV if needed (the player moved or something)
-        tcod.fov
-            .compute_fov(
-            player.x,
-            player.y,
-            TORCH_RADIUS,
-            FOV_LIGHT_WALLS,
-            FOV_ALGO
-        );
+        let mut query = <(&Vision, &mut Position)>::query();
+        let things_with_vision = query.iter_mut(&mut game.world);
+
+        for (vision, position) in things_with_vision {
+            if vision.grants_vision {
+                tcod.fov.compute_fov(
+                    position.x,
+                    position.y,
+                    TORCH_RADIUS,
+                    FOV_LIGHT_WALLS,
+                    FOV_ALGO
+                );
+            }
+        }
     }
 
-    let top = player.y - (game.camera_height / 2);
-    let bottom = player.y + (game.camera_height / 2);
-    let left = player.x - (game.camera_width / 2);
-    let right = player.x + (game.camera_width / 2);
+    let mut query = <&Position>::query();
+    let position = query.get(&mut game.world, player).unwrap().clone();
+
+    let top = position.x - (game.camera_height / 2);
+    let bottom = position.y + (game.camera_height / 2);
+    let left = position.x - (game.camera_width / 2);
+    let right = position.x + (game.camera_width / 2);
 
     for y in top..bottom {
         for x in left..right {
@@ -130,13 +130,14 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
         }
     }
 
-    // draw all objects in the list
-    for object in objects {
-        object.draw(&mut tcod.con);
+    let mut query = <(&Drawable, &Position)>::query();
+    for (drawable, position) in query.iter_mut(&mut game.world) {
+        drawable.draw(&mut tcod.con, position.x, position.y)
     }
 
-    let source_x = player.x - (game.camera_width / 2);
-    let source_y = player.y - (game.camera_height / 2);
+
+    let source_x = position.x - (game.camera_width / 2);
+    let source_y = position.y - (game.camera_height / 2);
 
     blit(
         &tcod.con,
@@ -150,7 +151,7 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recomput
 
 }
 
-fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut Vec<Object>) -> bool {
+fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
 
@@ -168,12 +169,35 @@ fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut Vec<Object>) -> bool 
         Key { code: Escape, .. } => return true, // exit game
 
         // movement keys
-        Key { code: Up, .. } => move_by(0, 0, -1, game, objects),
-        Key { code: Down, .. } => move_by(0, 0, 1, game, objects),
-        Key { code: Left, .. } => move_by(0,-1, 0, game, objects),
-        Key { code: Right, .. } => move_by(0, 1, 0, game, objects),
-        Key { code: Spacebar, .. } => build_village(objects[0].x, objects[0].y, game, objects),
-
+        Key { code: Up, .. } => {
+            let mut query = <(&Player, &mut Position)>::query();
+            let position = query.iter_mut(&mut game.world).next().unwrap().1;
+            position.y -= 1
+        },
+        Key { code: Down, .. } => {
+            let mut query = <(&Player, &mut Position)>::query();
+            let position = query.iter_mut(&mut game.world).next().unwrap().1;
+            position.y += 1
+        },
+        Key { code: Left, .. } => {
+            let mut query = <(&Player, &mut Position)>::query();
+            let position = query.iter_mut(&mut game.world).next().unwrap().1;
+            position.x -= 1;
+        },
+        Key { code: Right, .. } => {
+            let mut query = <(&Player, &mut Position)>::query();
+            let position = query.iter_mut(&mut game.world).next().unwrap().1;
+            position.x += 1
+        },
+        Key { code: Spacebar, .. } => {
+            let mut query = <(&Player,&Position)>::query();
+            let player = query.iter(&game.world).next().unwrap();
+            game.world.push((
+                Position::new(player.1.x, player.1.y),
+                Drawable::new('A', COLOR_VILLAGE),
+                House::new()
+            ));
+            },
         _ => {}
     }
 
@@ -215,7 +239,8 @@ fn main() {
     let mut game = Game {
         map: make_map(),
         camera_width: pixel_width,
-        camera_height: pixel_height
+        camera_height: pixel_height,
+        world: World::default()
     };
 
     let player = loop {
@@ -223,11 +248,14 @@ fn main() {
         let x = rng.gen_range(0, MAP_WIDTH);
         let y = rng.gen_range(0, MAP_HEIGHT);
         if surrounded_by_land(x, y, &game.map) {
-            break Object::new(x + MAP_WIDTH, y + MAP_HEIGHT, '@', WHITE, true);
+            break game.world.push((
+                Position::new(x, y),
+                Drawable::new('@', WHITE),
+                Vision::new(true),
+                Player::new(true)
+            ))
         }
     };
-
-    let mut objects = vec![player];
 
     for y in 0..MAP_HEIGHT*3 {
         for x in 0..MAP_WIDTH*3 {
@@ -240,22 +268,23 @@ fn main() {
         }
     }
 
-    let mut previous_player_position = (-1, -1);
+    let previous_player_position = (-1, -1);
 
     while !tcod.root.window_closed() {
         // clear the screen of the previous frame
         tcod.con.clear();
 
+        let mut player_query = <(&Player,&Position)>::query();
+        let players_position = player_query.iter(&game.world).next().unwrap().1;
+
         // render the screen
-        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
-        render_all(&mut tcod, &mut game, &objects, fov_recompute);
+        let fov_recompute = previous_player_position != (players_position.x, players_position.y);
+        render_all(&mut tcod, &mut game, fov_recompute, player);
 
         tcod.root.flush();
 
-        // handle keys and exit game if needed
-        let player = &mut objects[0];
-        previous_player_position = (player.x, player.y);
-        let exit = handle_keys(&mut tcod, &mut game, &mut objects);
+        // previous_player_position = player_and_postion.Pos;
+        let exit = handle_keys(&mut tcod, &mut game);
         if exit {
             break;
         }

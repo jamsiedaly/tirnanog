@@ -3,43 +3,83 @@ pub mod game_objects {
     use tcod::{Color, Console, BackgroundFlag};
     use tcod::console::{Root, Offscreen};
     use tcod::map::{ Map as FovMap};
+    use legion::*;
 
-    /// This is a generic object: the player, a monster, an item, the stairs...
-    /// It's always represented by a character on screen.
-    #[derive(Debug)]
-    pub struct Object {
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub(crate) struct Position {
         pub x: i32,
-        pub y: i32,
-        char: char,
-        grants_vision: bool,
-        color: Color,
+        pub y: i32
     }
 
-    impl Object {
-        pub fn new(x: i32, y: i32, char: char, color: Color, grants_vision: bool) -> Self {
-            Object { x, y, char, color, grants_vision }
+    impl Position {
+        pub fn new(x: i32, y: i32) -> Position {
+            return Position { x, y };
         }
+    }
 
-        /// set the color and then draw the character that represents this object at its position
-        pub fn draw(&self, con: &mut dyn Console) {
-            con.set_default_foreground(self.color);
-            con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
-        }
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub(crate) struct Drawable {
+        char: char,
+        color: Color
+    }
 
-        pub fn pos(&self) -> (i32, i32) {
-            (self.x, self.y)
+    impl Drawable {
+        pub fn new(char: char, color: Color) -> Drawable {
+            return Drawable { char, color };
         }
+        pub fn draw(&self, canvas: &mut dyn Console, x: i32, y: i32) {
+            canvas.set_default_foreground(self.color);
+            canvas.put_char(x, y, self.char, BackgroundFlag::None);
+        }
+    }
 
-        pub fn set_pos(&mut self, x: i32, y: i32) {
-            self.x = x;
-            self.y = y;
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub(crate) struct Vision {
+        pub grants_vision: bool
+    }
+
+    impl Vision {
+        pub fn new(active: bool) -> Vision {
+            return Vision { grants_vision: active }
         }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub(crate) struct Player {
+        pub alive: bool
+    }
+
+    impl Player {
+        pub fn new(alive: bool) -> Player {
+            return Player { alive }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub(crate) struct House {
+        population: i32
+    }
+
+    impl House {
+        pub fn new() -> House {
+            return House { population: 1 }
+        }
+    }
+
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub struct Tile {
+        blocked: bool,
+        block_sight: bool,
+        pub(crate) explored: bool,
+        buildable: bool,
+        pub(crate) color: Color,
     }
 
     pub struct Tcod {
         pub root: Root,
         pub con: Offscreen,
-        pub fov: FovMap,
+        pub fov: FovMap
     }
 
     pub(crate) type Map = Vec<Vec<Tile>>;
@@ -47,17 +87,8 @@ pub mod game_objects {
     pub struct Game {
         pub(crate) map: Map,
         pub(crate) camera_height: i32,
-        pub(crate) camera_width: i32
-    }
-
-    /// A tile of the map and its properties
-    #[derive(Clone, Copy, Debug)]
-    pub struct Tile {
-        blocked: bool,
-        block_sight: bool,
-        pub(crate) explored: bool,
-        buildable: bool,
-        pub(crate) color: Color,
+        pub(crate) camera_width: i32,
+        pub(crate) world: World
     }
 
     impl Game {
