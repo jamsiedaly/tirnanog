@@ -82,32 +82,39 @@ pub mod game_objects {
         pub fov: FovMap
     }
 
-    pub(crate) type Map = Vec<Vec<Tile>>;
-
-    pub struct Game {
-        pub(crate) map: Map,
-        pub(crate) camera_height: i32,
-        pub(crate) camera_width: i32,
-        pub(crate) world: World
+    pub struct GameMap {
+        tiles: Vec<Vec<Tile>>
     }
 
-    impl Game {
-        pub fn is_tile_blocked(&self, x: usize, y: usize) -> bool {
-            return self.map[x][y].blocked;
+    impl GameMap {
+        pub fn new(tiles: Vec<Vec<Tile>>) -> GameMap {
+            return GameMap { tiles };
+        }
+
+        pub fn is_tile_blocked(&self, x: i32, y: i32) -> bool {
+            return self.tiles[x as usize][y as usize].blocked;
         }
 
         pub fn is_tile_blocking_vision(&self, x: usize, y: usize) -> bool {
-            return self.map[x][y].block_sight;
+            return self.tiles[x][y].block_sight;
         }
 
         pub fn get_tile(&self, x: usize, y: usize) -> Tile {
-            return self.map[x][y];
+            return self.tiles[x][y];
         }
 
         pub fn set_tile_explored(&mut self, explored: bool, x: usize, y: usize) {
-            self.map[x][y].explored = explored;
+            self.tiles[x][y].explored = explored;
         }
     }
+
+    pub struct Game {
+    pub(crate) map: GameMap,
+    pub(crate) camera_height: i32,
+    pub(crate) camera_width: i32,
+    pub(crate) world: World
+    }
+
 
     impl Tile {
         pub fn is_buildable(&self,) -> bool {

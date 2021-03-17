@@ -9,33 +9,8 @@ mod game_objects;
 use crate::game_objects::game_objects::*;
 use legion::{World, IntoQuery, Entity};
 
-// fn move_by(, dx: i32, dy: i32, game: &Game) {
-//     let (x, y) = game.world.components().pos();
-//     let x = x - MAP_WIDTH;
-//     let y = y - MAP_HEIGHT;
-//     let next_x = if x + dx >= MAP_WIDTH {
-//         0
-//     } else if x + dx < 0 {
-//         MAP_WIDTH - 1
-//     } else {
-//         x + dx
-//     };
-//     let next_y = if y + dy >= MAP_HEIGHT {
-//         0
-//     } else if y + dy < 0 {
-//         MAP_HEIGHT - 1
-//     } else {
-//         y + dy
-//     };
-//
-//     if !game.is_tile_blocked(next_x as usize, next_y as usize) {
-//         objects[id].set_pos(next_x + MAP_WIDTH, next_y + MAP_HEIGHT);
-//     }
-// }
-
-fn make_map() -> Map {
-    // fill map with "unblocked" tiles
-    let mut map = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
+fn make_map() -> GameMap {
+    let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
     let perlin = Perlin::new();
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
@@ -52,13 +27,13 @@ fn make_map() -> Map {
             for i in 0..3 {
                 for j in 0..3 {
                     if height >= 1.1 {
-                        map[(x + (MAP_WIDTH*i))  as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::mountain()
+                        tiles[(x + (MAP_WIDTH*i))  as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::mountain()
                     } else if height >= 0.50 {
-                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::hill()
+                        tiles[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::hill()
                     } else if height < -0.175 {
-                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::water()
+                        tiles[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::water()
                     } else if fertility >= 0.25 {
-                        map[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::forest()
+                        tiles[(x + (MAP_WIDTH*i)) as usize][(y + (MAP_HEIGHT*j)) as usize] = Tile::forest()
                     }
                 }
             }
@@ -66,7 +41,7 @@ fn make_map() -> Map {
 
         }
     }
-    map
+    GameMap::new(tiles)
 }
 
 fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Entity) {
@@ -104,9 +79,9 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
                     x = if x < 0 { 0 } else if x >= (MAP_WIDTH*3) { (MAP_WIDTH*3) - 1 } else {x};
                     let mut y = y + (MAP_HEIGHT * vertical_offset);
                     y = if y < 0 { 0 } else if y >= (MAP_HEIGHT*3) { (MAP_HEIGHT*3) - 1 } else {y};
-                    let tile = game.get_tile(x as usize, y as usize);
+                    let tile = game.map.get_tile(x as usize, y as usize);
                     let color = if visible {
-                        game.set_tile_explored(true, x as usize, y as usize);
+                        game.map.set_tile_explored(true, x as usize, y as usize);
                         tile.color
                     } else if !tile.explored {
                         Color {
@@ -174,24 +149,37 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.y -= 1;
             if position.y < MAP_HEIGHT { position.y = MAP_HEIGHT*2 -1 }
+            let (x, y) = (position.x, position.y);
+            if game.map.is_tile_blocked(x, y) {
+                position.y += 1;
+            }
         },
         Key { code: Down, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.y += 1;
             if position.y >= MAP_HEIGHT*2 { position.y = 0 + MAP_HEIGHT}
+            if game.map.is_tile_blocked(position.x, position.y) {
+                position.y -= 1;
+            }
         },
         Key { code: Left, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.x -= 1;
             if position.x < MAP_WIDTH { position.x = MAP_WIDTH*2 -1 }
+            if game.map.is_tile_blocked(position.x, position.y) {
+                position.x += 1;
+            }
         },
         Key { code: Right, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.x += 1;
             if position.x >= MAP_WIDTH*2 { position.x = MAP_WIDTH }
+            if game.map.is_tile_blocked(position.x, position.y) {
+                position.x -= 1;
+            }
         },
         Key { code: Spacebar, .. } => {
             let mut query = <(&Player,&Position)>::query();
@@ -208,10 +196,10 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
     false
 }
 
-fn surrounded_by_land(x: i32, y: i32, map: &Map) -> bool {
+fn surrounded_by_land(x: i32, y: i32, map: &GameMap) -> bool {
     for x_offset in -1..1 {
         for y_offset in -1..1 {
-            let tile: Tile = map[(x+x_offset).abs() as usize][(y+y_offset).abs() as usize];
+            let tile: Tile = map.get_tile((x+x_offset).abs() as usize,(y+y_offset).abs() as usize);
             return !tile.is_blocked();
         }
     }
@@ -266,8 +254,8 @@ fn main() {
             tcod.fov.set(
                 x ,
                 y,
-                !game.is_tile_blocking_vision(x as usize,y as usize),
-                !game.is_tile_blocked(x as usize,y as usize),
+                !game.map.is_tile_blocking_vision(x as usize,y as usize),
+                !game.map.is_tile_blocked(x,y),
             );
         }
     }
