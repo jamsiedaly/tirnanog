@@ -90,7 +90,7 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
     let mut query = <&Position>::query();
     let position = query.get(&mut game.world, player).unwrap().clone();
 
-    let top = position.x - (game.camera_height / 2);
+    let top = position.y - (game.camera_height / 2);
     let bottom = position.y + (game.camera_height / 2);
     let left = position.x - (game.camera_width / 2);
     let right = position.x + (game.camera_width / 2);
@@ -172,22 +172,26 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
         Key { code: Up, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.y -= 1
+            position.y -= 1;
+            if position.y < MAP_HEIGHT { position.y = MAP_HEIGHT*2 -1 }
         },
         Key { code: Down, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.y += 1
+            position.y += 1;
+            if position.y >= MAP_HEIGHT*2 { position.y = 0 + MAP_HEIGHT}
         },
         Key { code: Left, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.x -= 1;
+            if position.x < MAP_WIDTH { position.x = MAP_WIDTH*2 -1 }
         },
         Key { code: Right, .. } => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.x += 1
+            position.x += 1;
+            if position.x >= MAP_WIDTH*2 { position.x = MAP_WIDTH }
         },
         Key { code: Spacebar, .. } => {
             let mut query = <(&Player,&Position)>::query();
@@ -249,7 +253,7 @@ fn main() {
         let y = rng.gen_range(0, MAP_HEIGHT);
         if surrounded_by_land(x, y, &game.map) {
             break game.world.push((
-                Position::new(x, y),
+                Position::new(x + MAP_WIDTH, y + MAP_HEIGHT),
                 Drawable::new('@', WHITE),
                 Vision::new(true),
                 Player::new(true)
