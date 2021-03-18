@@ -125,12 +125,7 @@ pub mod game_objects {
     pub(crate) world: World
     }
 
-
     impl Tile {
-        pub fn is_buildable(&self,) -> bool {
-            return self.buildable;
-        }
-
         pub fn is_blocked(&self,) -> bool {
             return self.blocked;
         }

@@ -282,7 +282,6 @@ fn main() {
         tcod.root.flush();
 
         let exit = handle_keys(&mut tcod, &mut game);
-        let after = tcod::system::get_elapsed_time();
         if exit {
             break;
         }
