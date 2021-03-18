@@ -95,6 +95,16 @@ pub mod game_objects {
             return self.tiles[x as usize][y as usize].blocked;
         }
 
+        pub fn is_buildable(&self, x: i32, y: i32) -> bool {
+            return self.tiles[x as usize][y as usize].buildable;
+        }
+
+
+        pub fn make_tile_built_on(&mut self, x: i32, y: i32) {
+            self.tiles[x as usize][y as usize].blocked = true;
+            self.tiles[x as usize][y as usize].buildable = false;
+        }
+
         pub fn is_tile_blocking_vision(&self, x: usize, y: usize) -> bool {
             return self.tiles[x][y].block_sight;
         }

@@ -10,7 +10,7 @@ pub mod settings {
     pub const FOV_LIGHT_WALLS: bool = true; // light walls or not
     pub const TORCH_RADIUS: i32 = 15;
 
-    pub const LIMIT_FPS: i32 = 60; // 20 frames-per-second maximum
+    pub const LIMIT_FPS: i32 = 60; // 60 frames-per-second maximum
 
     pub const COLOR_MOUNTAIN: Color = Color {
         r: 244,

@@ -8,6 +8,7 @@ use crate::settings::settings::*;
 mod game_objects;
 use crate::game_objects::game_objects::*;
 use legion::{World, IntoQuery, Entity};
+use tcod::input::KEY_PRESSED;
 
 fn make_map() -> GameMap {
     let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
@@ -45,6 +46,7 @@ fn make_map() -> GameMap {
 }
 
 fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Entity) {
+
     if fov_recompute {
         let mut query = <(&Vision, &mut Position)>::query();
         let things_with_vision = query.iter_mut(&mut game.world);
@@ -52,11 +54,11 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
         for (vision, position) in things_with_vision {
             if vision.grants_vision {
                 tcod.fov.compute_fov(
-                    position.x,
-                    position.y,
-                    TORCH_RADIUS,
-                    FOV_LIGHT_WALLS,
-                    FOV_ALGO
+                position.x,
+                position.y,
+                TORCH_RADIUS,
+                FOV_LIGHT_WALLS,
+                FOV_ALGO
                 );
             }
         }
@@ -79,29 +81,31 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
                     x = if x < 0 { 0 } else if x >= (MAP_WIDTH*3) { (MAP_WIDTH*3) - 1 } else {x};
                     let mut y = y + (MAP_HEIGHT * vertical_offset);
                     y = if y < 0 { 0 } else if y >= (MAP_HEIGHT*3) { (MAP_HEIGHT*3) - 1 } else {y};
-                    let tile = game.map.get_tile(x as usize, y as usize);
-                    let color = if visible {
+                    if visible {
                         game.map.set_tile_explored(true, x as usize, y as usize);
-                        tile.color
-                    } else if !tile.explored {
-                        Color {
-                            r: 242,
-                            g: 227,
-                            b: 211,
-                        }
-                    } else {
-                        Color {
-                            r: tile.color.r / 3,
-                            g: tile.color.g / 3,
-                            b: tile.color.b / 3,
-                        }
-                    };
-                    if vertical_offset == 0 && horizontal_offset == 0 {
-                        tcod.con
-                            .set_char_background(x, y, color, BackgroundFlag::Set);
                     }
                 }
-            }
+            };
+            let visible = tcod.fov.is_in_fov(x, y);
+            let tile = game.map.get_tile(x as usize, y as usize);
+            let color = if visible {
+                game.map.set_tile_explored(true, x as usize, y as usize);
+                tile.color
+            } else if !tile.explored {
+                Color {
+                    r: 242,
+                    g: 227,
+                    b: 211,
+                }
+            } else {
+                Color {
+                    r: tile.color.r / 3,
+                    g: tile.color.g / 3,
+                    b: tile.color.b / 3,
+                }
+            };
+            tcod.con
+                .set_char_background(x, y, color, BackgroundFlag::Set);
         }
     }
 
@@ -130,69 +134,74 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
 
-    let key = tcod.root.wait_for_keypress(true);
-    match key {
-        Key {
-            code: Enter,
-            alt: true,
-            ..
-        } => {
-            // Alt+Enter: toggle fullscreen
-            let fullscreen = tcod.root.is_fullscreen();
-            tcod.root.set_fullscreen(!fullscreen);
-        }
-        Key { code: Escape, .. } => return true, // exit game
+    let key_option = tcod.root.check_for_keypress(KEY_PRESSED);
+    match key_option {
+        Some(key) => match key {
+            Key {
+                code: Enter,
+                alt: true,
+                ..
+            } => {
+                // Alt+Enter: toggle fullscreen
+                let fullscreen = tcod.root.is_fullscreen();
+                tcod.root.set_fullscreen(!fullscreen);
+            }
+            Key { code: Escape, .. } => return true, // exit game
 
-        // movement keys
-        Key { code: Up, .. } => {
-            let mut query = <(&Player, &mut Position)>::query();
-            let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.y -= 1;
-            if position.y < MAP_HEIGHT { position.y = MAP_HEIGHT*2 -1 }
-            let (x, y) = (position.x, position.y);
-            if game.map.is_tile_blocked(x, y) {
-                position.y += 1;
-            }
-        },
-        Key { code: Down, .. } => {
-            let mut query = <(&Player, &mut Position)>::query();
-            let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.y += 1;
-            if position.y >= MAP_HEIGHT*2 { position.y = 0 + MAP_HEIGHT}
-            if game.map.is_tile_blocked(position.x, position.y) {
+            // movement keys
+            Key { code: Up, .. } => {
+                let mut query = <(&Player, &mut Position)>::query();
+                let position = query.iter_mut(&mut game.world).next().unwrap().1;
                 position.y -= 1;
-            }
-        },
-        Key { code: Left, .. } => {
-            let mut query = <(&Player, &mut Position)>::query();
-            let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.x -= 1;
-            if position.x < MAP_WIDTH { position.x = MAP_WIDTH*2 -1 }
-            if game.map.is_tile_blocked(position.x, position.y) {
-                position.x += 1;
-            }
-        },
-        Key { code: Right, .. } => {
-            let mut query = <(&Player, &mut Position)>::query();
-            let position = query.iter_mut(&mut game.world).next().unwrap().1;
-            position.x += 1;
-            if position.x >= MAP_WIDTH*2 { position.x = MAP_WIDTH }
-            if game.map.is_tile_blocked(position.x, position.y) {
-                position.x -= 1;
-            }
-        },
-        Key { code: Spacebar, .. } => {
-            let mut query = <(&Player,&Position)>::query();
-            let player = query.iter(&game.world).next().unwrap();
-            game.world.push((
-                Position::new(player.1.x, player.1.y),
-                Drawable::new('A', COLOR_VILLAGE),
-                House::new()
-            ));
+                if position.y < MAP_HEIGHT { position.y = MAP_HEIGHT*2 -1 }
+                let (x, y) = (position.x, position.y);
+                if game.map.is_tile_blocked(x, y) {
+                    position.y += 1;
+                }
             },
+            Key { code: Down, .. } => {
+                let mut query = <(&Player, &mut Position)>::query();
+                let position = query.iter_mut(&mut game.world).next().unwrap().1;
+                position.y += 1;
+                if position.y >= MAP_HEIGHT*2 { position.y = 0 + MAP_HEIGHT}
+                if game.map.is_tile_blocked(position.x, position.y) {
+                    position.y -= 1;
+                }
+            },
+            Key { code: Left, .. } => {
+                let mut query = <(&Player, &mut Position)>::query();
+                let position = query.iter_mut(&mut game.world).next().unwrap().1;
+                position.x -= 1;
+                if position.x < MAP_WIDTH { position.x = MAP_WIDTH*2 -1 }
+                if game.map.is_tile_blocked(position.x, position.y) {
+                    position.x += 1;
+                }
+            },
+            Key { code: Right, .. } => {
+                let mut query = <(&Player, &mut Position)>::query();
+                let position = query.iter_mut(&mut game.world).next().unwrap().1;
+                position.x += 1;
+                if position.x >= MAP_WIDTH*2 { position.x = MAP_WIDTH }
+                if game.map.is_tile_blocked(position.x, position.y) {
+                    position.x -= 1;
+                }
+            },
+            Key { code: Spacebar, .. } => {
+                let mut query = <(&Player,&Position)>::query();
+                let player = query.iter(&game.world).next().unwrap();
+                if game.map.is_buildable(player.1.x, player.1.y) {
+                    game.map.make_tile_built_on(player.1.x, player.1.y);
+                    game.world.push((
+                        Position::new(player.1.x, player.1.y),
+                        Drawable::new('A', COLOR_VILLAGE),
+                        House::new()
+                    ));
+                }
+            },
+            _ => {}
+        }
         _ => {}
     }
-
     false
 }
 
@@ -217,7 +226,6 @@ fn main() {
         .font("arial10x10.png", FontLayout::Tcod)
         .font_type(FontType::Greyscale)
         .size(pixel_width, pixel_height)
-        .fullscreen(true)
         .title("Rouge Civ")
         .init();
 
@@ -269,14 +277,12 @@ fn main() {
         let mut player_query = <(&Player,&Position)>::query();
         let players_position = player_query.iter(&game.world).next().unwrap().1;
 
-        // render the screen
         let fov_recompute = previous_player_position != (players_position.x, players_position.y);
         render_all(&mut tcod, &mut game, fov_recompute, player);
-
         tcod.root.flush();
 
-        // previous_player_position = player_and_postion.Pos;
         let exit = handle_keys(&mut tcod, &mut game);
+        let after = tcod::system::get_elapsed_time();
         if exit {
             break;
         }
