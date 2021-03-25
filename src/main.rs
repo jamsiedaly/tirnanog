@@ -128,6 +128,29 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
         1.0,
     );
 
+
+    //GUI rendering
+
+    tcod.panel.set_default_background(BLACK);
+    tcod.panel.clear();
+
+    let population = format!("Population {}", game.population.to_string());
+    tcod.panel.print(0, 0, population);
+    let wood = format!("Wood {}", game.wood.to_string());
+    tcod.panel.print(0, 1, wood);
+    let iron = format!("Iron {}", game.iron.to_string());
+    tcod.panel.print(0, 2, iron);
+
+    // blit the contents of `panel` to the root console
+    blit(
+        &tcod.panel,
+        (0, 0),
+        (0, 0),
+        &mut tcod.root,
+        (0, 0),
+        1.0,
+        1.0,
+    );
 }
 
 fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
@@ -189,7 +212,8 @@ fn handle_keys(tcod: &mut Tcod, game: &mut Game) -> bool {
             Key { code: Spacebar, .. } => {
                 let mut query = <(&Player,&Position)>::query();
                 let player = query.iter(&game.world).next().unwrap();
-                if game.map.is_buildable(player.1.x, player.1.y) {
+                if game.map.is_buildable(player.1.x, player.1.y) && game.wood >= 10 {
+                    game.wood -= 10;
                     game.map.make_tile_built_on(player.1.x, player.1.y);
                     game.world.push((
                         Position::new(player.1.x, player.1.y),
@@ -221,7 +245,6 @@ fn main() {
     let pixel_width = screen_width / 20;
     let pixel_height = screen_height / 20;
 
-
     let root = Root::initializer()
         .font("arial10x10.png", FontLayout::Tcod)
         .font_type(FontType::Greyscale)
@@ -232,6 +255,7 @@ fn main() {
     let mut tcod = Tcod {
         root,
         con: Offscreen::new(MAP_WIDTH*3, MAP_HEIGHT*3),
+        panel: Offscreen::new(screen_width, PANEL_HEIGHT),
         fov: FovMap::new(MAP_WIDTH*3, MAP_HEIGHT*3),
     };
 
@@ -239,8 +263,11 @@ fn main() {
     let mut game = Game {
         map: make_map(),
         camera_width: pixel_width,
+        population: 0,
+        wood: 100,
+        iron: 0,
         camera_height: pixel_height,
-        world: World::default()
+        world: World::default(),
     };
 
     let player = loop {
@@ -285,5 +312,7 @@ fn main() {
         if exit {
             break;
         }
+
+
     }
 }

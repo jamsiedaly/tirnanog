@@ -79,6 +79,7 @@ pub mod game_objects {
     pub struct Tcod {
         pub root: Root,
         pub con: Offscreen,
+        pub panel: Offscreen,
         pub fov: FovMap
     }
 
@@ -119,10 +120,13 @@ pub mod game_objects {
     }
 
     pub struct Game {
-    pub(crate) map: GameMap,
-    pub(crate) camera_height: i32,
-    pub(crate) camera_width: i32,
-    pub(crate) world: World
+        pub(crate) map: GameMap,
+        pub(crate) camera_height: i32,
+        pub(crate) camera_width: i32,
+        pub(crate) population: i32,
+        pub(crate) wood: i32,
+        pub(crate) iron: i32,
+        pub(crate) world: World
     }
 
     impl Tile {
