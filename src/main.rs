@@ -9,7 +9,7 @@ mod game_objects;
 use crate::game_objects::game_objects::*;
 use legion::{World, IntoQuery, Entity};
 use tcod::input::KEY_PRESSED;
-use crate::game_objects::game_objects::Action::{Quit, Move_Up, Move_Down, Move_Left, Move_Right, Build, Full_Screen};
+use crate::game_objects::game_objects::Action::{Quit, MoveUp, MoveDown, MoveLeft, MoveRight, Build, FullScreen};
 
 fn make_map() -> GameMap {
     let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
@@ -165,18 +165,17 @@ fn handle_keys(tcod: &mut Tcod) -> Option<Action> {
                 code: Enter,
                 alt: true,
                 ..
-            } => Some(Full_Screen),
+            } => Some(FullScreen),
             Key { code: Escape, .. } => Some(Quit),
-            Key { code: Up, .. } => Some(Move_Up),
-            Key { code: Down, .. } => Some(Move_Down),
-            Key { code: Left, .. } => Some(Move_Left),
-            Key { code: Right, .. } => Some(Move_Right),
+            Key { code: Up, .. } => Some(MoveUp),
+            Key { code: Down, .. } => Some(MoveDown),
+            Key { code: Left, .. } => Some(MoveLeft),
+            Key { code: Right, .. } => Some(MoveRight),
             Key { code: Spacebar, .. } => Some(Build),
             _ => None
         }
         _ => None
     };
-    None
 }
 
 fn surrounded_by_land(x: i32, y: i32, map: &GameMap) -> bool {
@@ -191,7 +190,7 @@ fn surrounded_by_land(x: i32, y: i32, map: &GameMap) -> bool {
 
 fn process_player_action(action: Action, mut game: &mut Game) {
     match action {
-        Move_Up => {
+        MoveUp => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.y -= 1;
@@ -201,7 +200,7 @@ fn process_player_action(action: Action, mut game: &mut Game) {
                 position.y += 1;
             }
         }
-        Move_Down => {
+        MoveDown => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.y += 1;
@@ -210,7 +209,7 @@ fn process_player_action(action: Action, mut game: &mut Game) {
                 position.y -= 1;
             }
         }
-        Move_Left => {
+        MoveLeft => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.x -= 1;
@@ -220,7 +219,7 @@ fn process_player_action(action: Action, mut game: &mut Game) {
                 position.x += 1;
             }
         }
-        Move_Right => {
+        MoveRight => {
             let mut query = <(&Player, &mut Position)>::query();
             let position = query.iter_mut(&mut game.world).next().unwrap().1;
             position.x += 1;
@@ -318,7 +317,7 @@ fn main() {
         let action = handle_keys(&mut tcod);
         if action.is_some() {
             let action = action.unwrap();
-            if action == Full_Screen {
+            if action == FullScreen {
                 let fullscreen = tcod.root.is_fullscreen();
                 tcod.root.set_fullscreen(!fullscreen);
             } else if action == Quit { break }

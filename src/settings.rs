@@ -12,9 +12,7 @@ pub mod settings {
 
     pub const LIMIT_FPS: i32 = 60; // 60 frames-per-second maximum
 
-    pub const BAR_WIDTH: i32 = 20;
     pub const PANEL_HEIGHT: i32 = 7;
-    // pub const PANEL_Y: i32 = SCREEN_HEIGHT - PANEL_HEIGHT;
 
     pub const COLOR_MOUNTAIN: Color = Color {
         r: 244,
