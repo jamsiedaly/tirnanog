@@ -185,4 +185,15 @@ pub mod game_objects {
         }
     }
 
+    #[derive(PartialEq, Debug)]
+    pub(crate) enum Action {
+        Move_Up,
+        Move_Down,
+        Move_Left,
+        Move_Right,
+        Build,
+        Full_Screen,
+        Quit,
+    }
+
 }
