@@ -10,6 +10,7 @@ use crate::game_objects::game_objects::*;
 use legion::{World, IntoQuery, Entity};
 use tcod::input::KEY_PRESSED;
 use crate::game_objects::game_objects::Action::{Quit, MoveUp, MoveDown, MoveLeft, MoveRight, Build, FullScreen};
+use std::fmt::{Debug, Formatter};
 
 fn make_map() -> GameMap {
     let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
@@ -154,28 +155,30 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
     );
 }
 
-fn handle_keys(tcod: &mut Tcod) -> Option<Action> {
+fn handle_keys(tcod: &mut Tcod) -> Vec<Action> {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
 
+    let mut actions = vec![];
     let key_option = tcod.root.check_for_keypress(KEY_PRESSED);
-    return match key_option {
+    match key_option {
         Some(key) => match key {
             Key {
                 code: Enter,
                 alt: true,
                 ..
-            } => Some(FullScreen),
-            Key { code: Escape, .. } => Some(Quit),
-            Key { code: Up, .. } => Some(MoveUp),
-            Key { code: Down, .. } => Some(MoveDown),
-            Key { code: Left, .. } => Some(MoveLeft),
-            Key { code: Right, .. } => Some(MoveRight),
-            Key { code: Spacebar, .. } => Some(Build),
-            _ => None
+            } => actions.push(FullScreen),
+            Key { code: Escape, .. } => actions.push(Quit),
+            Key { code: Up, .. } => actions.push(MoveUp),
+            Key { code: Down, .. } => actions.push(MoveDown),
+            Key { code: Left, .. } => actions.push(MoveLeft),
+            Key { code: Right, .. } => actions.push(MoveRight),
+            Key { code: Spacebar, .. } => actions.push(Build),
+            _ => { }
         }
-        _ => None
+        _ => { }
     };
+    return actions
 }
 
 fn surrounded_by_land(x: i32, y: i32, map: &GameMap) -> bool {
@@ -303,7 +306,7 @@ fn main() {
 
     let previous_player_position = (-1, -1);
 
-    while !tcod.root.window_closed() {
+    'game_loop: while !tcod.root.window_closed() {
         // clear the screen of the previous frame
         tcod.con.clear();
 
@@ -314,13 +317,13 @@ fn main() {
         render_all(&mut tcod, &mut game, fov_recompute, player);
         tcod.root.flush();
 
-        let action = handle_keys(&mut tcod);
-        if action.is_some() {
-            let action = action.unwrap();
+        let actions = handle_keys(&mut tcod);
+        for action in actions {
+            println!("{:?}", action);
             if action == FullScreen {
                 let fullscreen = tcod.root.is_fullscreen();
                 tcod.root.set_fullscreen(!fullscreen);
-            } else if action == Quit { break }
+            } else if action == Quit { break 'game_loop }
             process_player_action(action, &mut game);
         }
     }
