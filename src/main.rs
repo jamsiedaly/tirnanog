@@ -11,6 +11,7 @@ use legion::{World, IntoQuery, Entity};
 use tcod::input::KEY_PRESSED;
 use crate::game_objects::game_objects::Action::{Quit, MoveUp, MoveDown, MoveLeft, MoveRight, Build, FullScreen};
 use std::fmt::{Debug, Formatter};
+use tcod::system::get_elapsed_time;
 
 fn make_map() -> GameMap {
     let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
@@ -140,7 +141,7 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
     tcod.panel.print(0, 0, population);
     let wood = format!("Wood {}", game.wood.to_string());
     tcod.panel.print(0, 1, wood);
-    let iron = format!("Iron {}", game.iron.to_string());
+    let iron = format!("Iron {}", game.food.to_string());
     tcod.panel.print(0, 2, iron);
 
     // blit the contents of `panel` to the root console
@@ -274,7 +275,7 @@ fn main() {
         camera_width: pixel_width,
         population: 0,
         wood: 100,
-        iron: 0,
+        food: 100,
         camera_height: pixel_height,
         world: World::default(),
     };
@@ -306,7 +307,14 @@ fn main() {
 
     let previous_player_position = (-1, -1);
 
+    let mut time_of_last_frame = 0;
+    let mut rng = rand::thread_rng();
+
     'game_loop: while !tcod.root.window_closed() {
+        let time_of_this_frame = get_elapsed_time().as_millis();
+        let time_elapsed = (time_of_this_frame - time_of_last_frame) as i32;
+        time_of_last_frame = time_of_this_frame;
+
         // clear the screen of the previous frame
         tcod.con.clear();
 
@@ -319,12 +327,32 @@ fn main() {
 
         let actions = handle_keys(&mut tcod);
         for action in actions {
-            println!("{:?}", action);
             if action == FullScreen {
                 let fullscreen = tcod.root.is_fullscreen();
                 tcod.root.set_fullscreen(!fullscreen);
             } else if action == Quit { break 'game_loop }
             process_player_action(action, &mut game);
+        }
+
+        let mut houses_query = <(&House,&Position)>::query();
+        let mut new_people = Vec::new();
+        for house_entity in houses_query.iter_mut(&mut game.world) {
+            let house = house_entity.0;
+            let position = house_entity.1;
+            if house.population < 5 {
+                println!("Making a person");
+                new_people.push((
+                    Person::new(),
+                    Position::new(
+                        position.x + rng.gen_range(-3,3),
+                        position.y + rng.gen_range(-3 ,3)
+                    ),
+                    Drawable::new('&', COLOR_PERSON)
+                ));
+            }
+        }
+        for person in new_people {
+            game.world.push(person);
         }
     }
 }

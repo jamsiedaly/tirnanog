@@ -44,4 +44,9 @@ pub mod settings {
         g: 144,
         b: 110,
     };
+    pub const COLOR_PERSON: Color = Color {
+        r: 255,
+        g: 255,
+        b: 153,
+    };
 }

@@ -57,15 +57,29 @@ pub mod game_objects {
 
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub(crate) struct House {
-        population: i32
+        pub population: i32
     }
 
     impl House {
         pub fn new() -> House {
-            return House { population: 1 }
+            return House { population: 0 }
+        }
+
+        pub fn increment_population(&mut self) {
+            self.population += 1;
         }
     }
 
+    #[derive(Clone, Debug, PartialEq)]
+    pub(crate) struct Person {
+        name: String
+    }
+
+    impl Person {
+        pub fn new() -> Person {
+            return Person { name: String::from("Bob") }
+        }
+    }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub struct Tile {
@@ -125,7 +139,7 @@ pub mod game_objects {
         pub(crate) camera_width: i32,
         pub(crate) population: i32,
         pub(crate) wood: i32,
-        pub(crate) iron: i32,
+        pub(crate) food: i32,
         pub(crate) world: World
     }
 
