@@ -334,13 +334,11 @@ fn main() {
             process_player_action(action, &mut game);
         }
 
-        let mut houses_query = <(&House,&Position)>::query();
+        let mut houses_query = <(&mut House,&Position)>::query();
         let mut new_people = Vec::new();
-        for house_entity in houses_query.iter_mut(&mut game.world) {
-            let house = house_entity.0;
-            let position = house_entity.1;
-            if house.population < 5 {
-                println!("Making a person");
+        for (house, position) in houses_query.iter_mut(&mut game.world) {
+            if house.population <= 4 {
+                house.population += 1;
                 new_people.push((
                     Person::new(),
                     Position::new(
