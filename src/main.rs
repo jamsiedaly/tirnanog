@@ -339,12 +339,16 @@ fn main() {
         for (house, position) in houses_query.iter_mut(&mut game.world) {
             if house.population <= 4 {
                 house.population += 1;
+                let (x, y) = loop {
+                    let x = position.x + rng.gen_range(-3,3);
+                    let y = position.y + rng.gen_range(-3,3);
+                    if game.map.is_buildable(x, y) {
+                        break (x, y)
+                    }
+                };
                 new_people.push((
                     Person::new(),
-                    Position::new(
-                        position.x + rng.gen_range(-3,3),
-                        position.y + rng.gen_range(-3 ,3)
-                    ),
+                    Position::new(x, y),
                     Drawable::new('&', COLOR_PERSON)
                 ));
             }
