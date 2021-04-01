@@ -356,5 +356,11 @@ fn main() {
         for person in new_people {
             game.world.push(person);
         }
+
+        let mut person_query = <(&Person,&mut Position)>::query();
+        for (person, position) in person_query.iter_mut(&mut game.world) {
+            position.x += rng.gen_range(-1,1);
+            position.y += rng.gen_range(-1,1);
+        }
     }
 }
