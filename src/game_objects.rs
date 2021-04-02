@@ -72,12 +72,16 @@ pub mod game_objects {
 
     #[derive(Clone, Debug, PartialEq)]
     pub(crate) struct Person {
-        name: String
+        name: String,
+        pub home: Position
     }
 
     impl Person {
-        pub fn new() -> Person {
-            return Person { name: String::from("Bob") }
+        pub fn new(x: i32, y: i32) -> Person {
+            return Person {
+                name: String::from("Bob"),
+                home: Position::new(x, y)
+            }
         }
     }
 

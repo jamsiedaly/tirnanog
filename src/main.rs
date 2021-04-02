@@ -12,6 +12,7 @@ use tcod::input::KEY_PRESSED;
 use crate::game_objects::game_objects::Action::{Quit, MoveUp, MoveDown, MoveLeft, MoveRight, Build, FullScreen};
 use std::fmt::{Debug, Formatter};
 use tcod::system::get_elapsed_time;
+use rand::prelude::ThreadRng;
 
 fn make_map() -> GameMap {
     let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
@@ -334,33 +335,47 @@ fn main() {
             process_player_action(action, &mut game);
         }
 
-        let mut houses_query = <(&mut House,&Position)>::query();
-        let mut new_people = Vec::new();
-        for (house, position) in houses_query.iter_mut(&mut game.world) {
-            if house.population <= 4 {
-                house.population += 1;
-                let (x, y) = loop {
-                    let x = position.x + rng.gen_range(-3,3);
-                    let y = position.y + rng.gen_range(-3,3);
-                    if game.map.is_buildable(x, y) {
-                        break (x, y)
-                    }
-                };
-                new_people.push((
-                    Person::new(),
-                    Position::new(x, y),
-                    Drawable::new('&', COLOR_PERSON)
-                ));
-            }
-        }
-        for person in new_people {
-            game.world.push(person);
-        }
+        housingSystem(&mut game, &mut rng);
+        personSystem(&mut game, &mut rng);
+    }
+}
 
-        let mut person_query = <(&Person,&mut Position)>::query();
-        for (person, position) in person_query.iter_mut(&mut game.world) {
-            position.x += rng.gen_range(-1,1);
-            position.y += rng.gen_range(-1,1);
+fn personSystem(mut game: &mut Game, rng: &mut ThreadRng) {
+    let mut person_query = <(&Person, &mut Position)>::query();
+    for (person, position) in person_query.iter_mut(&mut game.world) {
+        let lower_bound_x = if person.home.x - position.x < 5  { -1 } else { 0 };
+        let upper_bound_x = if person.home.x - position.x > -5  { 2 } else { 1 };
+        let lower_bound_y = if person.home.y - position.y < 5  { -1 } else { 0 };
+        let upper_bound_y = if person.home.y - position.y > -5  { 2 } else { 1 };
+        let x_delta = rng.gen_range(lower_bound_x, upper_bound_x);
+        let y_delta = rng.gen_range(lower_bound_y, upper_bound_y);
+        position.x += x_delta;
+        position.y += y_delta;
+    }
+}
+
+fn housingSystem(mut game: &mut Game, rng: &mut ThreadRng) {
+    let mut houses_query = <(&mut House, &Position)>::query();
+    let mut new_people = Vec::new();
+    for (house, position) in houses_query.iter_mut(&mut game.world) {
+        if house.population <= 4 && game.food >= 10 {
+            house.population += 1;
+            game.food -= 10;
+            let (x, y) = loop {
+                let x = position.x + rng.gen_range(-3, 4);
+                let y = position.y + rng.gen_range(-3, 4);
+                if game.map.is_buildable(x, y) {
+                    break (x, y)
+                }
+            };
+            new_people.push((
+                Person::new(position.x, position.y),
+                Position::new(x, y),
+                Drawable::new('&', COLOR_PERSON)
+            ));
         }
+    }
+    for person in new_people {
+        game.world.push(person);
     }
 }
