@@ -57,30 +57,36 @@ pub mod game_objects {
 
     #[derive(Clone, Copy, Debug, PartialEq)]
     pub(crate) struct House {
+        pub time_since_last_spawn: u128,
         pub population: i32
     }
 
     impl House {
-        pub fn new() -> House {
-            return House { population: 0 }
-        }
+        pub const TIME_BETWEEN_SPAWNS: u128 = 5000;
 
-        pub fn increment_population(&mut self) {
-            self.population += 1;
+        pub fn new() -> House {
+            return House {
+                population: 0,
+                time_since_last_spawn: 0
+            }
         }
     }
 
     #[derive(Clone, Debug, PartialEq)]
     pub(crate) struct Person {
         name: String,
-        pub home: Position
+        pub home: Position,
+        pub time_since_last_action: u128
     }
 
     impl Person {
+        pub const TIME_BETWEEN_ACTIONS: u128 = 1000;
+
         pub fn new(x: i32, y: i32) -> Person {
             return Person {
                 name: String::from("Bob"),
-                home: Position::new(x, y)
+                home: Position::new(x, y),
+                time_since_last_action: 0
             }
         }
     }

@@ -10,7 +10,6 @@ use crate::game_objects::game_objects::*;
 use legion::{World, IntoQuery, Entity};
 use tcod::input::KEY_PRESSED;
 use crate::game_objects::game_objects::Action::{Quit, MoveUp, MoveDown, MoveLeft, MoveRight, Build, FullScreen};
-use std::fmt::{Debug, Formatter};
 use tcod::system::get_elapsed_time;
 use rand::prelude::ThreadRng;
 
@@ -142,7 +141,7 @@ fn render_all(tcod: &mut Tcod, game: &mut Game, fov_recompute: bool, player: Ent
     tcod.panel.print(0, 0, population);
     let wood = format!("Wood {}", game.wood.to_string());
     tcod.panel.print(0, 1, wood);
-    let iron = format!("Iron {}", game.food.to_string());
+    let iron = format!("Food {}", game.food.to_string());
     tcod.panel.print(0, 2, iron);
 
     // blit the contents of `panel` to the root console
@@ -308,13 +307,13 @@ fn main() {
 
     let previous_player_position = (-1, -1);
 
-    let mut time_of_last_frame = 0;
     let mut rng = rand::thread_rng();
 
+    let mut time_of_last_frame = 0;
     'game_loop: while !tcod.root.window_closed() {
-        let time_of_this_frame = get_elapsed_time().as_millis();
-        let time_elapsed = (time_of_this_frame - time_of_last_frame) as i32;
-        time_of_last_frame = time_of_this_frame;
+        let time_of_current_frame = get_elapsed_time().as_millis();
+        let time_delta = time_of_current_frame - time_of_last_frame;
+        time_of_last_frame = time_of_current_frame;
 
         // clear the screen of the previous frame
         tcod.con.clear();
@@ -335,30 +334,36 @@ fn main() {
             process_player_action(action, &mut game);
         }
 
-        housingSystem(&mut game, &mut rng);
-        personSystem(&mut game, &mut rng);
+        housing_system(&mut game, &mut rng, time_delta);
+        person_system(&mut game, &mut rng,time_delta);
     }
 }
 
-fn personSystem(mut game: &mut Game, rng: &mut ThreadRng) {
-    let mut person_query = <(&Person, &mut Position)>::query();
+fn person_system(game: &mut Game, rng: &mut ThreadRng, time_delta: u128) {
+    let mut person_query = <(&mut Person, &mut Position)>::query();
     for (person, position) in person_query.iter_mut(&mut game.world) {
-        let lower_bound_x = if person.home.x - position.x < 5  { -1 } else { 0 };
-        let upper_bound_x = if person.home.x - position.x > -5  { 2 } else { 1 };
-        let lower_bound_y = if person.home.y - position.y < 5  { -1 } else { 0 };
-        let upper_bound_y = if person.home.y - position.y > -5  { 2 } else { 1 };
-        let x_delta = rng.gen_range(lower_bound_x, upper_bound_x);
-        let y_delta = rng.gen_range(lower_bound_y, upper_bound_y);
-        position.x += x_delta;
-        position.y += y_delta;
+        person.time_since_last_action += time_delta;
+        if person.time_since_last_action >= Person::TIME_BETWEEN_ACTIONS {
+            person.time_since_last_action = 0;
+            let lower_bound_x = if person.home.x - position.x < 5  { -1 } else { 0 };
+            let upper_bound_x = if person.home.x - position.x > -5  { 2 } else { 1 };
+            let lower_bound_y = if person.home.y - position.y < 5  { -1 } else { 0 };
+            let upper_bound_y = if person.home.y - position.y > -5  { 2 } else { 1 };
+            let x_delta = rng.gen_range(lower_bound_x, upper_bound_x);
+            let y_delta = rng.gen_range(lower_bound_y, upper_bound_y);
+            position.x += x_delta;
+            position.y += y_delta;
+        }
     }
 }
 
-fn housingSystem(mut game: &mut Game, rng: &mut ThreadRng) {
+fn housing_system(mut game: &mut Game, rng: &mut ThreadRng, time_delta: u128) {
     let mut houses_query = <(&mut House, &Position)>::query();
     let mut new_people = Vec::new();
     for (house, position) in houses_query.iter_mut(&mut game.world) {
-        if house.population <= 4 && game.food >= 10 {
+        house.time_since_last_spawn += time_delta;
+        if house.population <= 4 && game.food >= 10 && house.time_since_last_spawn >= House::TIME_BETWEEN_SPAWNS {
+            house.time_since_last_spawn = 0;
             house.population += 1;
             game.food -= 10;
             let (x, y) = loop {
