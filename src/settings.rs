@@ -39,6 +39,11 @@ pub mod settings {
         g: 214,
         b: 110,
     };
+    pub const COLOR_FARM: Color = Color {
+        r: 201,
+        g: 219,
+        b: 0,
+    };
     pub const COLOR_VILLAGE: Color = Color {
         r: 161,
         g: 144,

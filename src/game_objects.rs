@@ -1,5 +1,5 @@
 pub mod game_objects {
-    use crate::settings::settings::{COLOR_PLAINS, COLOR_MOUNTAIN, COLOR_HILL, COLOR_FOREST, COLOR_SEA};
+    use crate::settings::settings::{COLOR_PLAINS, COLOR_MOUNTAIN, COLOR_HILL, COLOR_FOREST, COLOR_SEA, COLOR_FARM};
     use tcod::{Color, Console, BackgroundFlag};
     use tcod::console::{Root, Offscreen};
     use tcod::map::{ Map as FovMap};
@@ -76,7 +76,8 @@ pub mod game_objects {
     pub(crate) struct Person {
         name: String,
         pub home: Position,
-        pub time_since_last_action: u128
+        pub time_since_last_movement: u128,
+        pub time_since_last_harvest: u128,
     }
 
     impl Person {
@@ -86,7 +87,8 @@ pub mod game_objects {
             return Person {
                 name: String::from("Bob"),
                 home: Position::new(x, y),
-                time_since_last_action: 0
+                time_since_last_movement: 0,
+                time_since_last_harvest: 0,
             }
         }
     }
@@ -98,6 +100,7 @@ pub mod game_objects {
         pub(crate) explored: bool,
         buildable: bool,
         pub(crate) color: Color,
+        pub fertility: i32,
     }
 
     pub struct Tcod {
@@ -141,6 +144,10 @@ pub mod game_objects {
         pub fn set_tile_explored(&mut self, explored: bool, x: usize, y: usize) {
             self.tiles[x][y].explored = explored;
         }
+
+        pub fn harvest(&mut self, x: i32, y: i32) -> i32 {
+            return self.tiles[x as usize][y as usize].harvest();
+        }
     }
 
     pub struct Game {
@@ -158,13 +165,21 @@ pub mod game_objects {
             return self.blocked;
         }
 
-        pub fn empty() -> Self {
+        pub fn harvest(&mut self) -> i32 {
+            if self.color == COLOR_PLAINS {
+                self.color = COLOR_FARM;
+            }
+            return self.fertility;
+        }
+
+        pub fn meadow() -> Self {
             Tile {
                 blocked: false,
                 block_sight: false,
                 explored: false,
                 buildable: true,
                 color: COLOR_PLAINS,
+                fertility: 3,
             }
         }
 
@@ -175,6 +190,7 @@ pub mod game_objects {
                 explored: false,
                 buildable: false,
                 color: COLOR_MOUNTAIN,
+                fertility: 0,
             }
         }
 
@@ -185,6 +201,7 @@ pub mod game_objects {
                 explored: false,
                 buildable: false,
                 color: COLOR_HILL,
+                fertility: 1,
             }
         }
 
@@ -195,6 +212,7 @@ pub mod game_objects {
                 explored: false,
                 buildable: true,
                 color: COLOR_FOREST,
+                fertility: 1,
             }
         }
 
@@ -205,6 +223,7 @@ pub mod game_objects {
                 explored: false,
                 buildable: false,
                 color: COLOR_SEA,
+                fertility: 3,
             }
         }
     }

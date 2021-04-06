@@ -14,7 +14,7 @@ use tcod::system::get_elapsed_time;
 use rand::prelude::ThreadRng;
 
 fn make_map() -> GameMap {
-    let mut tiles = vec![vec![Tile::empty(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
+    let mut tiles = vec![vec![Tile::meadow(); (MAP_HEIGHT*3) as usize]; (MAP_WIDTH*3) as usize];
     let perlin = Perlin::new();
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
@@ -335,16 +335,29 @@ fn main() {
         }
 
         housing_system(&mut game, &mut rng, time_delta);
-        person_system(&mut game, &mut rng,time_delta);
+        person_system(&mut game, &mut rng, time_delta);
+        harvest_system(&mut game, time_delta)
+    }
+}
+
+fn harvest_system(mut game: &mut Game, time_delta: u128) {
+    let mut person_query = <(&mut Person, &mut Position)>::query();
+    for (person, position) in person_query.iter_mut(&mut game.world) {
+        person.time_since_last_harvest += time_delta;
+        if person.time_since_last_harvest >= Person::TIME_BETWEEN_ACTIONS {
+            person.time_since_last_harvest = 0;
+            let harvest = game.map.harvest(position.x, position.y);
+            game.food += harvest;
+        }
     }
 }
 
 fn person_system(game: &mut Game, rng: &mut ThreadRng, time_delta: u128) {
     let mut person_query = <(&mut Person, &mut Position)>::query();
     for (person, position) in person_query.iter_mut(&mut game.world) {
-        person.time_since_last_action += time_delta;
-        if person.time_since_last_action >= Person::TIME_BETWEEN_ACTIONS {
-            person.time_since_last_action = 0;
+        person.time_since_last_movement += time_delta;
+        if person.time_since_last_movement >= Person::TIME_BETWEEN_ACTIONS {
+            person.time_since_last_movement = 0;
             let lower_bound_x = if person.home.x - position.x < 5  { -1 } else { 0 };
             let upper_bound_x = if person.home.x - position.x > -5  { 2 } else { 1 };
             let lower_bound_y = if person.home.y - position.y < 5  { -1 } else { 0 };
