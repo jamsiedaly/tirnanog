@@ -235,11 +235,12 @@ fn process_player_action(action: Action, mut game: &mut Game) {
         Build => {
             let mut query = <(&Player,&Position)>::query();
             let player = query.iter(&game.world).next().unwrap();
-            if game.map.is_buildable(player.1.x, player.1.y) && game.wood >= 10 {
+            let player_pos = Position{ x: player.1.x, y: player.1.y };
+            if game.map.is_buildable(player_pos.x, player_pos.y) && game.wood >= 10 {
                 game.wood -= 10;
-                game.map.make_tile_built_on(player.1.x, player.1.y);
+                game.map.make_tile_built_on(player_pos.x, player_pos.y);
                 game.world.push((
-                    Position::new(player.1.x, player.1.y),
+                    Position::new(player_pos.x, player_pos.y),
                     Drawable::new('A',COLOR_VILLAGE),
                     House::new()
                 ));
